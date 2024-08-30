@@ -107,12 +107,15 @@ func initializePlayers() {
 }
 
 func displayBoard() {
-	fmt.Printf("Welcome Player %v\n", player1.name)
-	fmt.Printf("Welcome Player %v\n", player2.name)
+	const red string = "\033[31m"
+	const blue string = "\033[34m"
+	const yellow string = "\033[33m"
+	const reset string = "\033[0m"
 
-	fmt.Printf("   %s\n", player1.name)
+	fmt.Printf("Welcome Player %v\nWelcome Player %v", player1.name, player2.name)
 
-	fmt.Print("\n |A|B|C|D|E|\n")
+	fmt.Printf("%-4s\n", player1.name)
+	fmt.Printf("\n %s|A|B|C|D|E|\033[0m\n", yellow)
 
 	var col int = 0
 	for idx := range tiles {
@@ -120,18 +123,25 @@ func displayBoard() {
 		var suffix string = ""
 		if idx%5 == 0 {
 			col += 1
-			prefix = strconv.Itoa(col)
+			prefix = yellow + strconv.Itoa(col) + reset
 		}
 
 		var nl string = ""
 		if (idx+1)%5 == 0 && idx != 0 {
-			nl = "|" + strconv.Itoa(col) + "\n"
+			nl = "|" + yellow + strconv.Itoa(col) + reset + "\n"
 		}
-		fmt.Printf("%s|%d%s%s", prefix, tiles[idx], nl, suffix)
+
+		var color string = ""
+		if hasPiece(player1, idx) {
+			color = red
+		} else if hasPiece(player2, idx) {
+			color = blue
+		}
+		fmt.Printf("%s|"+"%s"+"%d"+"\033[0m"+"%s%s", prefix, color, tiles[idx], nl, suffix)
 	}
 
-	fmt.Print(" |A|B|C|D|E|\n")
-	fmt.Printf("\n\n   %s\n\n", player2.name)
+	fmt.Print(" \033[33m|A|B|C|D|E|\033[0m\n")
+	fmt.Printf("\n%-4s\n\n", player2.name)
 }
 
 func coordToIndex(move string) int {
@@ -146,10 +156,11 @@ func coordToIndex(move string) int {
 
 	for idx := range alpha {
 		if upper == alpha[idx] {
-			gridVal = rowIntVal*(len(alpha)-indexOf(alpha, upper)) - len(alpha)
+			gridVal = (len(alpha) * rowIntVal) - (len(alpha) - indexOf(alpha, upper))
 		}
 	}
 
+	fmt.Printf("MOVE = %s | GRID VAL = %d\n", move, gridVal)
 	return gridVal
 }
 
