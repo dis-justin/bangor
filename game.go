@@ -6,25 +6,35 @@ import (
 	"unicode"
 )
 
+type Player struct {
+	Name   string
+	Pieces []Piece
+	Pos    int
+}
+
+var player1 Player
+var player2 Player
+
 type Piece struct {
 	Idx int
 	Val int
 }
 
-var tiles [25]*Piece
-
-type Player struct {
-	Name   string
-	Pieces []Piece
+func (piece *Piece) IsOnBackline(player *Player) bool {
+	fmt.Printf("val: %d\n", piece.Idx)
+	if player == &player1 {
+		return piece.Idx >= 0 && piece.Idx <= 4
+	} else if player == &player2 {
+		return piece.Idx >= 20 && piece.Idx <= 25
+	}
+	return false
 }
 
-func (player *Player) HasPiece(piece *Piece) bool {
+var tiles [25]*Piece
 
-	//fmt.Printf("PIECES: %v\n\n", player.Pieces)
+func (player *Player) HasPiece(piece *Piece) bool {
 	for i := range player.Pieces {
 		if player.Pieces[i].Idx == piece.Idx {
-
-			//fmt.Printf("PLAYER %v: HAS PIECE PIECE: %v\n\n", player.Name, piece)
 			return true
 		}
 	}
@@ -32,19 +42,35 @@ func (player *Player) HasPiece(piece *Piece) bool {
 }
 
 func (player *Player) Move(to *Piece, from *Piece) {
-	// Update the board
-	tiles[to.Idx].Val = from.Val
-	tiles[from.Idx].Val = 0
 
-	player.Pieces = append(player.Pieces, *to)
+	// Battle time...
+	otherPlayer := OtherPlayer(player)
+	if otherPlayer.HasPiece(to) {
+		battle(otherPlayer, to, player, from)
+	} else {
+		// Update the board
+		tiles[to.Idx].Val = from.Val
+		tiles[from.Idx].Val = 0
 
-	for i := range player.Pieces {
-		if player.Pieces[i].Idx == from.Idx {
-			fmt.Print("hit")
-			player.Pieces = append(player.Pieces[:i], player.Pieces[i:]...)
+		to.Val++
+		player.AddPiece(to)
+		player.Pieces = player.RemovePiece(from)
+	}
+
+}
+
+func (player *Player) RemovePiece(piece *Piece) []Piece {
+	for i, v := range player.Pieces {
+		if v == *piece {
+			return player.Pieces[:i+copy(player.Pieces[i:], player.Pieces[i+1:])]
 		}
 	}
-	fmt.Printf("PIECE: %v\n\n", player.Pieces)
+	return player.Pieces
+}
+
+func (player *Player) AddPiece(piece *Piece) {
+	player.Pieces = append(player.Pieces, *piece)
+	tiles[piece.Idx] = piece
 }
 
 func (player *Player) Play() {
@@ -76,20 +102,38 @@ func (player *Player) Play() {
 			}
 			break
 		}
-
-		displayBoard()
+	} else if boardPiece.IsOnBackline(player) {
+		player.AddPiece(&boardPiece)
 	} else {
 		invalidMove(*player)
 		player.Play()
+		//player
 	}
+
+	displayBoard()
 }
 
-var player1 Player
-var player2 Player
+func (player *Player) Welcome() {
+	fmt.Printf("Welcome Player %v!\n", player.Name)
+}
+
+func OtherPlayer(player *Player) *Player {
+	if player == &player1 {
+		return &player2
+	} else if player == &player2 {
+		return &player1
+	} else {
+		return nil
+	}
+}
 
 func main() {
 	initializeBoard()
 	initializePlayers()
+
+	player1.Welcome()
+	player2.Welcome()
+
 	displayBoard()
 	runGameLoop()
 }
@@ -116,7 +160,7 @@ func evaluateWin(player Player) bool {
 func initializeBoard() {
 	for i := 0; i < 25; i++ {
 		// Starting Tile values
-		if i < 5 {
+		if i < 4 {
 			piece := Piece{Idx: i, Val: 1}
 			tiles[i] = &piece
 			player1.Pieces = append(player1.Pieces, piece)
@@ -150,8 +194,6 @@ func displayBoard() {
 	const yellow string = "\033[33m"
 	const reset string = "\033[0m"
 
-	fmt.Printf("Welcome Player %v\nWelcome Player %v", player1.Name, player2.Name)
-
 	fmt.Printf("%-4s\n", player1.Name)
 	fmt.Printf("\n %s|A|B|C|D|E|\033[0m\n", yellow)
 
@@ -180,6 +222,23 @@ func displayBoard() {
 
 	fmt.Print(" \033[33m|A|B|C|D|E|\033[0m\n")
 	fmt.Printf("\n%-4s\n\n", player2.Name)
+}
+
+func battle(defender *Player, to *Piece, attacker *Player, from *Piece) {
+	tTo := to.Val
+	tFrom := from.Val
+
+	to.Val -= tTo
+	from.Val -= tFrom
+
+	tiles[to.Idx] = to
+	tiles[from.Idx] = from
+
+	if to.Val == 0 {
+		defender.Pieces = defender.RemovePiece(to)
+	} else {
+		attacker.AddPiece(to)
+	}
 }
 
 func coordToIndex(move string) int {
