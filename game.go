@@ -6,11 +6,82 @@ import (
 	"unicode"
 )
 
-var tiles [25]int
+type Piece struct {
+	Idx int
+	Val int
+}
+
+var tiles [25]*Piece
 
 type Player struct {
-	name   string
-	pieces [5]int
+	Name   string
+	Pieces []Piece
+}
+
+func (player *Player) HasPiece(piece *Piece) bool {
+
+	//fmt.Printf("PIECES: %v\n\n", player.Pieces)
+	for i := range player.Pieces {
+		if player.Pieces[i].Idx == piece.Idx {
+
+			//fmt.Printf("PLAYER %v: HAS PIECE PIECE: %v\n\n", player.Name, piece)
+			return true
+		}
+	}
+	return false
+}
+
+func (player *Player) Move(to *Piece, from *Piece) {
+	// Update the board
+	tiles[to.Idx].Val = from.Val
+	tiles[from.Idx].Val = 0
+
+	player.Pieces = append(player.Pieces, *to)
+
+	for i := range player.Pieces {
+		if player.Pieces[i].Idx == from.Idx {
+			fmt.Print("hit")
+			player.Pieces = append(player.Pieces[:i], player.Pieces[i:]...)
+		}
+	}
+	fmt.Printf("PIECE: %v\n\n", player.Pieces)
+}
+
+func (player *Player) Play() {
+	var move string
+
+	fmt.Printf("Play your %d move: %v\n", 1, player.Name)
+	fmt.Scanln(&move)
+
+	boardPiece := *indexToPiece(coordToIndex(move))
+	if player.HasPiece(&boardPiece) {
+		fmt.Println("Options:\n1. Enter the coordinate to move\n2. Enter 'u' to Upgrade\n3. Enter 'c' to Cancel")
+
+		var decision string
+		fmt.Scanln(&decision)
+
+		switch decision {
+		case "u":
+			upgrade(&boardPiece)
+			break
+		case "c":
+			player.Play()
+			break
+		default:
+			var newPiece = *indexToPiece(coordToIndex(decision))
+			if newPiece.Idx != -1 {
+				player.Move(&newPiece, &boardPiece)
+			} else {
+				invalidMove(*player)
+			}
+			break
+		}
+
+		displayBoard()
+	} else {
+		invalidMove(*player)
+		player.Play()
+	}
 }
 
 var player1 Player
@@ -26,60 +97,16 @@ func main() {
 func runGameLoop() {
 	var winner bool = false
 	for winner == false {
-		playRound(player1)
+		player1.Play()
 		evaluateWin(player1)
 
-		playRound(player2)
+		player2.Play()
 		evaluateWin(player2)
 	}
 }
 
-func playRound(player Player) {
-	var move string
-
-	fmt.Printf("Play your %d move: %v\n", 1, player.name)
-	fmt.Scanln(&move)
-
-	var boardCoord int = coordToIndex(move)
-	if hasPiece(player, boardCoord) {
-		fmt.Println("Options:\n1. Enter the coordinate to move\n2. Enter 'u' to Upgrade\n3. Enter 'c' to Cancel")
-
-		var decision string
-		fmt.Scanln(&decision)
-
-		switch decision {
-		case "u":
-			upgrade(boardCoord)
-			break
-		case "c":
-			playRound(player)
-			break
-		default:
-			var newCoord = coordToIndex(decision)
-			if newCoord != -1 {
-				moveTile(newCoord, boardCoord, player)
-			} else {
-				invalidMove(player)
-			}
-			break
-		}
-
-		displayBoard()
-	} else {
-		invalidMove(player)
-		playRound(player)
-	}
-}
-
-func moveTile(to int, from int, player Player) {
-	tiles[to] = tiles[from]
-	tiles[from] = 0
-
-	//player.pieces[indexOfTile(player.pieces, from)] = to
-}
-
-func upgrade(coord int) {
-	tiles[coord]++
+func upgrade(piece *Piece) {
+	tiles[piece.Idx].Val++
 }
 
 func evaluateWin(player Player) bool {
@@ -90,20 +117,31 @@ func initializeBoard() {
 	for i := 0; i < 25; i++ {
 		// Starting Tile values
 		if i < 5 {
-			tiles[i] = 1
-			player1.pieces[i] = i
+			piece := Piece{Idx: i, Val: 1}
+			tiles[i] = &piece
+			player1.Pieces = append(player1.Pieces, piece)
 		} else if i >= 20 && i <= 24 {
-			tiles[i] = 1
-			player2.pieces[i%5] = i
+			piece := Piece{Idx: i, Val: 1}
+			tiles[i] = &piece
+			player2.Pieces = append(player2.Pieces, piece)
+		} else if i == 10 {
+			piece := Piece{Idx: i, Val: 1}
+			tiles[i] = &piece
+			player1.Pieces = append(player1.Pieces, piece)
+		} else if i == 15 {
+			piece := Piece{Idx: i, Val: 1}
+			tiles[i] = &piece
+			player2.Pieces = append(player2.Pieces, Piece{Idx: i, Val: 1})
 		} else {
-			tiles[i] = 0
+			piece := Piece{Idx: i, Val: 0}
+			tiles[i] = &piece
 		}
 	}
 }
 
 func initializePlayers() {
-	player1.name = "Justin"
-	player2.name = "David"
+	player1.Name = "Justin"
+	player2.Name = "David"
 }
 
 func displayBoard() {
@@ -112,9 +150,9 @@ func displayBoard() {
 	const yellow string = "\033[33m"
 	const reset string = "\033[0m"
 
-	fmt.Printf("Welcome Player %v\nWelcome Player %v", player1.name, player2.name)
+	fmt.Printf("Welcome Player %v\nWelcome Player %v", player1.Name, player2.Name)
 
-	fmt.Printf("%-4s\n", player1.name)
+	fmt.Printf("%-4s\n", player1.Name)
 	fmt.Printf("\n %s|A|B|C|D|E|\033[0m\n", yellow)
 
 	var col int = 0
@@ -132,16 +170,16 @@ func displayBoard() {
 		}
 
 		var color string = ""
-		if hasPiece(player1, idx) {
+		if player1.HasPiece(indexToPiece(idx)) {
 			color = red
-		} else if hasPiece(player2, idx) {
+		} else if player2.HasPiece(indexToPiece(idx)) {
 			color = blue
 		}
-		fmt.Printf("%s|"+"%s"+"%d"+"\033[0m"+"%s%s", prefix, color, tiles[idx], nl, suffix)
+		fmt.Printf("%s|"+"%s"+"%d"+"\033[0m"+"%s%s", prefix, color, tiles[idx].Val, nl, suffix)
 	}
 
 	fmt.Print(" \033[33m|A|B|C|D|E|\033[0m\n")
-	fmt.Printf("\n%-4s\n\n", player2.name)
+	fmt.Printf("\n%-4s\n\n", player2.Name)
 }
 
 func coordToIndex(move string) int {
@@ -160,17 +198,16 @@ func coordToIndex(move string) int {
 		}
 	}
 
-	fmt.Printf("MOVE = %s | GRID VAL = %d\n", move, gridVal)
 	return gridVal
 }
 
-func hasPiece(player Player, gridVal int) bool {
-	for i := range player.pieces {
-		if player.pieces[i] == gridVal {
-			return true
+func indexToPiece(idx int) *Piece {
+	for i := range tiles {
+		if tiles[i].Idx == idx {
+			return tiles[i]
 		}
 	}
-	return false
+	return nil
 }
 
 func indexOf(slice []byte, value byte) int {
@@ -193,5 +230,5 @@ func indexOfTile(slice []int, value int) int {
 
 func invalidMove(player Player) {
 	fmt.Print("Invalid move, try again...\n\n")
-	playRound(player)
+	player.Play()
 }
