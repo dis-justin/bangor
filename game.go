@@ -20,8 +20,11 @@ type Piece struct {
 	Val int
 }
 
+func (piece *Piece) Upgrade() {
+	tiles[piece.Idx].Val++
+}
+
 func (piece *Piece) IsOnBackline(player *Player) bool {
-	fmt.Printf("val: %d\n", piece.Idx)
 	if player == &player1 {
 		return piece.Idx >= 0 && piece.Idx <= 4
 	} else if player == &player2 {
@@ -46,13 +49,13 @@ func (player *Player) Move(to *Piece, from *Piece) {
 	// Battle time...
 	otherPlayer := OtherPlayer(player)
 	if otherPlayer.HasPiece(to) {
-		battle(otherPlayer, to, player, from)
+		player.Battle(otherPlayer, to, from)
 	} else {
 		// Update the board
-		tiles[to.Idx].Val = from.Val
+		tiles[to.Idx].Val += from.Val
 		tiles[from.Idx].Val = 0
 
-		to.Val++
+		to.Val = tiles[to.Idx].Val
 		player.AddPiece(to)
 		player.Pieces = player.RemovePiece(from)
 	}
@@ -60,8 +63,8 @@ func (player *Player) Move(to *Piece, from *Piece) {
 }
 
 func (player *Player) RemovePiece(piece *Piece) []Piece {
-	for i, v := range player.Pieces {
-		if v == *piece {
+	for i := range player.Pieces {
+		if player.Pieces[i].Idx == *&piece.Idx {
 			return player.Pieces[:i+copy(player.Pieces[i:], player.Pieces[i+1:])]
 		}
 	}
@@ -73,13 +76,53 @@ func (player *Player) AddPiece(piece *Piece) {
 	tiles[piece.Idx] = piece
 }
 
+func (attacker *Player) Battle(defender *Player, to *Piece, from *Piece) {
+	tTo := to.Val
+	tFrom := from.Val
+
+	if to.Val-tFrom < 0 {
+		to.Val = 0
+	} else {
+		to.Val -= tFrom
+	}
+
+	if from.Val-tTo < 0 {
+		from.Val = 0
+	} else {
+		from.Val -= tTo
+	}
+
+	tiles[to.Idx].Val = to.Val
+	tiles[from.Idx].Val = from.Val
+
+	if to.Val <= 0 {
+		defender.Pieces = defender.RemovePiece(to)
+	}
+	if from.Val <= 0 {
+		attacker.Pieces = attacker.RemovePiece(from)
+	}
+}
+
+func (player *Player) Combine(to *Piece, from *Piece) {
+	to.Val += from.Val
+	from.Val = 0
+
+	tiles[to.Idx] = to
+	tiles[from.Idx] = from
+}
+
 func (player *Player) Play() {
 	var move string
 
 	fmt.Printf("Play your %d move: %v\n", 1, player.Name)
 	fmt.Scanln(&move)
 
-	boardPiece := *indexToPiece(coordToIndex(move))
+	var idx int = coordToIndex(move)
+	var boardPiece Piece
+	if idx > -1 {
+		boardPiece = *indexToPiece(idx)
+	}
+
 	if player.HasPiece(&boardPiece) {
 		fmt.Println("Options:\n1. Enter the coordinate to move\n2. Enter 'u' to Upgrade\n3. Enter 'c' to Cancel")
 
@@ -88,7 +131,7 @@ func (player *Player) Play() {
 
 		switch decision {
 		case "u":
-			upgrade(&boardPiece)
+			boardPiece.Upgrade()
 			break
 		case "c":
 			player.Play()
@@ -103,11 +146,10 @@ func (player *Player) Play() {
 			break
 		}
 	} else if boardPiece.IsOnBackline(player) {
+		boardPiece.Val = 1
 		player.AddPiece(&boardPiece)
 	} else {
 		invalidMove(*player)
-		player.Play()
-		//player
 	}
 
 	displayBoard()
@@ -123,7 +165,7 @@ func OtherPlayer(player *Player) *Player {
 	} else if player == &player2 {
 		return &player1
 	} else {
-		return nil
+		return nil // Who could it be Shaggy?
 	}
 }
 
@@ -147,10 +189,6 @@ func runGameLoop() {
 		player2.Play()
 		evaluateWin(player2)
 	}
-}
-
-func upgrade(piece *Piece) {
-	tiles[piece.Idx].Val++
 }
 
 func evaluateWin(player Player) bool {
@@ -224,29 +262,12 @@ func displayBoard() {
 	fmt.Printf("\n%-4s\n\n", player2.Name)
 }
 
-func battle(defender *Player, to *Piece, attacker *Player, from *Piece) {
-	tTo := to.Val
-	tFrom := from.Val
-
-	to.Val -= tTo
-	from.Val -= tFrom
-
-	tiles[to.Idx] = to
-	tiles[from.Idx] = from
-
-	if to.Val == 0 {
-		defender.Pieces = defender.RemovePiece(to)
-	} else {
-		attacker.AddPiece(to)
-	}
-}
-
 func coordToIndex(move string) int {
 	var alpha = []byte{65, 66, 67, 68, 69}
 	col := move[0]
 	row := move[1]
 
-	var gridVal int = 0
+	var gridVal int = -1
 
 	upper := byte(unicode.ToUpper(rune(col)))
 	rowIntVal, _ := strconv.Atoi(string(row))
